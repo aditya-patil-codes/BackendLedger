@@ -35,7 +35,8 @@ async function userRegisterController(req, res) {
     user: {
       _id: user._id,
       email: user.email,
-      name: user.name
+      name: user.name,
+      systemUser: Boolean(user.systemUser)
     },
     token
   }); // if we create a resourse then send 201
@@ -49,7 +50,9 @@ async function userRegisterController(req, res) {
 async function userLoginController(req, res) {
   const { email, password } = req.body;
 
-  const user = await userModel.findOne({ email: email }).select("+password");
+  const user = await userModel
+    .findOne({ email: email })
+    .select("+password +systemUser");
 
   if (!user) {
     return res.status(400).json({ message: "email or password is invalid" });
@@ -73,7 +76,8 @@ async function userLoginController(req, res) {
     user: {
       _id: user._id,
       email: user.email,
-      name: user.name
+      name: user.name,
+      systemUser: Boolean(user.systemUser)
     },
     token
   }); // if we create a resourse then send 201
