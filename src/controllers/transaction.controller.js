@@ -5,6 +5,19 @@ const userModel = require("../models/user.model");
 const emailService = require("../services/email.service");
 const mongoose = require("mongoose");
 
+async function resolveAccount(identifier) {
+  const value = identifier.trim();
+
+  if (mongoose.Types.ObjectId.isValid(value)) {
+    return accountModel.findById(value);
+  }
+
+  const user = await userModel.findOne({ email: value.toLowerCase() });
+  if (!user) return null;
+
+  return accountModel.findOne({ user: user._id, status: "ACTIVE" });
+}
+
 /**
  * - Create a new transaction
  * THE 10-STEP TRANSFER FLOW:
@@ -36,9 +49,7 @@ async function createTransaction(req, res) {
     _id: fromAccount
   });
 
-  const toUserAccount = await accountModel.findOne({
-    _id: toAccount
-  });
+  const toUserAccount = await resolveAccount(toAccount);
 
   if (!fromUserAccount || !toUserAccount) {
     return res.status(400).json({
@@ -118,8 +129,8 @@ async function createTransaction(req, res) {
       await transactionModel.create(
         [
           {
-            fromAccount,
-            toAccount,
+            fromAccount: fromUserAccount._id,
+            toAccount: toUserAccount._id,
             amount,
             idempotencyKey,
             status: "PENDING"
@@ -132,7 +143,7 @@ async function createTransaction(req, res) {
     const debitLedgerEntry = await ledgerModel.create(
       [
         {
-          account: fromAccount,
+          account: fromUserAccount._id,
           amount: amount,
           transaction: transaction._id,
           type: "DEBIT"
@@ -148,7 +159,7 @@ async function createTransaction(req, res) {
     const creditLedgerEntry = await ledgerModel.create(
       [
         {
-          account: toAccount,
+          account: toUserAccount._id,
           amount: amount,
           transaction: transaction._id,
           type: "CREDIT"
@@ -180,7 +191,7 @@ async function createTransaction(req, res) {
     req.user.email,
     req.user.name,
     amount,
-    toAccount
+    toUserAccount._id
   );
 
   return res.status(201).json({
@@ -237,9 +248,7 @@ async function createInitialFundsTransaction(req, res) {
     });
   }
 
-  const toUserAccount = await accountModel.findOne({
-    _id: toAccount
-  });
+  const toUserAccount = await resolveAccount(toAccount);
 
   if (!toUserAccount) {
     return res.status(400).json({
